@@ -1,0 +1,17 @@
+# Build artifacts
+build*/
+
+# Market data (large; see data/README.md for download instructions)
+data/raw/
+data/cache/
+
+# Analysis outputs
+results/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# macOS
+.DS_Store

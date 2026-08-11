@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.os }} / ${{ matrix.build_type }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        build_type: [Release, Debug]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+      - name: Build
+        run: cmake --build build -j
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  sanitizers:
+    name: sanitizers (${{ matrix.sanitizer }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [address, undefined]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        # Debug so the sanitizers see unoptimized frames and exact line info.
+        run: >
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug
+          -DOEE_SANITIZE=${{ matrix.sanitizer }}
+      - name: Build
+        run: cmake --build build -j
+      - name: Test
+        env:
+          # halt_on_error makes UBSan fail the job rather than log and pass.
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+          ASAN_OPTIONS: detect_leaks=1
+        run: ctest --test-dir build --output-on-failure
+
+  python:
+    name: python analysis layer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile-check analysis scripts
+        # The calibration/plot layer has no unit tests (it is glue over CSV
+        # produced by the tested C++ core); syntax-checking it still catches
+        # the class of error that would break a results run.
+        run: python -m compileall -q python/
