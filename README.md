@@ -128,7 +128,7 @@ resilience extensions, and the calibration methodology, is documented in
   AddressSanitizer and UndefinedBehaviorSanitizer jobs that exercise the
   full test suite and the command-line tools against real market data.
 
-## Honest limitations
+## Limitations
 
 - **The backtest is not a full counterfactual.** Historical order book
   states are replayed as they occurred, in a world where the simulated
@@ -159,7 +159,7 @@ resilience extensions, and the calibration methodology, is documented in
   and the implementation detects and reports the condition rather than
   returning a degenerate result.
 
-## How to run it
+## How to run
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
@@ -182,7 +182,7 @@ python3 -m venv .venv && .venv/bin/pip install matplotlib
 ./build/oee_rebuild --msg <message.csv> --book <orderbook.csv>   # book validation
 ```
 
-## What I would extend with more time
+## Future work
 
 - **Multiple trading days per ticker**, to determine whether the
   single-day findings, particularly the resilience measurement, which
