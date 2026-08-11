@@ -7,20 +7,21 @@ liquidity and pushes the price against the trader, a cost known as market
 impact. Executing it too slowly leaves the position exposed to adverse price
 movement for longer, a risk known as timing risk or price drift. The
 Almgren-Chriss (2000) framework formalizes this tradeoff and derives a
-closed-form optimal execution schedule. This project implements that
-framework end to end and validates it against real historical exchange data.
+specific optimal execution schedule. This project implements that framework
+end to end and validates it against real historical exchange data.
 
 ## Why this is hard
 
 This is a nontrivial problem in practice, not only an academic one:
 execution trading desks employ dedicated systems and personnel to solve it,
 because the cost of an incorrect schedule is realized capital, not a test
-metric. Market impact and timing risk cannot be reduced to a single unit and
-minimized jointly. Market impact is a near-certain cost the trader imposes
-on itself; timing risk is uncertainty the trader is exposed to. There is no
-unconditionally optimal schedule, only a tradeoff curve parameterized by
-risk tolerance. Producing a schedule that is provably optimal under a stated
-risk preference, and confirming that the tradeoff holds on real market data
+metric. Market impact and timing risk cannot simply be added together and
+minimized as one number. Market impact is a near-certain cost the trader
+imposes on itself; timing risk is uncertainty the trader is exposed to.
+There is no single schedule that is best in every situation, only a
+tradeoff that depends on how much risk the trader is willing to accept.
+Producing a schedule that is provably optimal for a stated risk preference,
+and confirming that the tradeoff holds on real market data
 rather than only in the model's own accounting, is the core engineering
 problem this project addresses.
 
@@ -47,10 +48,10 @@ efficient frontier, the minimum cost achievable at each risk level.*
 **Headline results** (cost measured in basis points, bps; 1 bp = 0.01% of
 trade value):
 
-- The optimal schedule reduced execution risk, measured as the standard
-  deviation of implementation shortfall, from 11.5 bps to 5.8 bps, roughly
-  a factor of two, at a cost of under one additional basis point in
-  expected impact (5.39 to 6.35 bps).
+- The optimal schedule reduced execution risk, how much cost varies from
+  trade to trade, from 11.5 bps to 5.8 bps, roughly a factor of two, at a
+  cost of under one additional basis point in expected impact (5.39 to
+  6.35 bps).
 - The POV strategy was dominated: it produced both higher expected cost
   (5.60 bps) and higher risk (13.3 bps) than the optimal schedule, meaning
   there was no risk tolerance for which POV was the better choice.
@@ -68,11 +69,11 @@ denoted λ. At λ = 0, the model reduces exactly to uniform time-slicing
 (TWAP): impact is minimized by trading at a constant rate, and timing risk
 is simply accepted. As λ increases, the schedule front-loads execution,
 trading faster to reduce exposure to price uncertainty at the cost of
-higher expected impact. The optimal trajectory at any λ is a closed-form
-solution to a mean-variance objective over expected transaction cost. The
-λ = 0 case is not a separate heuristic bolted onto the general solution; it
-is the exact limit of the same formula, which serves as a useful internal
-consistency check on the implementation.
+higher expected impact. At any level of λ, the model produces an exact
+selling schedule that balances expected cost against how much that cost
+could vary. The λ = 0 case is not a separate heuristic bolted onto the
+general solution; it is the exact edge case of the same formula, which
+serves as a useful internal consistency check on the implementation.
 
 The full derivation, including the closed-form solution, the drift and
 resilience extensions, and the calibration methodology, is documented in
@@ -145,17 +146,18 @@ resilience extensions, and the calibration methodology, is documented in
   realized price path. This limitation is stated directly alongside the
   results.
 - **No modeling of passive orders or queue position.** Every simulated
-  order is marketable and crosses the spread immediately, consistent
-  with the underlying model, which specifies a trading rate rather than
-  a fill probability. Modeling passive orders correctly would require
-  modeling adverse selection, which is outside the scope of this
-  project.
+  order trades immediately at the best available price, consistent with
+  how the underlying model works: it specifies how fast to trade, not
+  the odds of getting filled while waiting in a queue. Modeling passive
+  orders correctly would require modeling adverse selection (the risk
+  that a resting order only gets filled when the price is about to move
+  against it), which is outside the scope of this project.
 - **The optimal schedule is not well-defined for every instrument
   tested.** For one of the three tickers (INTC), the calibrated
-  parameters violate the model's own well-posedness condition. This is a
-  genuine, disclosed finding, documented in MODEL.md, and the
-  implementation detects and reports the condition rather than returning
-  a degenerate result.
+  parameters violate a condition the model requires to produce a valid
+  answer. This is a genuine, disclosed finding, documented in MODEL.md,
+  and the implementation detects and reports the condition rather than
+  returning a degenerate result.
 
 ## How to run it
 
