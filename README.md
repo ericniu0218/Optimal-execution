@@ -1,163 +1,161 @@
 # Optimal Execution Engine
 
-If you need to sell a large block of stock, you have a problem that has
-nothing to do with picking the right stock: *how* you sell it changes what
-you get paid. Dump it all on the market at once and you push the price down
-against yourself before you're done selling — like trying to unload a truck
-of furniture at one yard sale, the price drops with every piece once buyers
-sense how much is coming. Sell it off slowly and gradually instead, and
-you're safe from that effect, but now you're exposed for hours to a price
-that moves around for reasons that have nothing to do with you. This project
-builds and tests, on real stock exchange data, the classic model
-(Almgren-Chriss, 2000) for finding the best point between those two extremes.
+This project addresses the problem of optimal trade execution: liquidating a
+large equity position over a fixed time horizon while minimizing total
+transaction cost. Executing an order too quickly consumes available
+liquidity and pushes the price against the trader, a cost known as market
+impact. Executing it too slowly leaves the position exposed to adverse price
+movement for longer, a risk known as timing risk or price drift. The
+Almgren-Chriss (2000) framework formalizes this tradeoff and derives a
+closed-form optimal execution schedule. This project implements that
+framework end to end and validates it against real historical exchange data.
 
 ## Why this is hard
 
-This isn't a toy problem — every trading desk that executes large orders has
-people and systems dedicated to exactly this question, because it's real
-money either way: trade too fast and you're paying a visible, measurable toll
-in market impact; trade too slow and you're gambling on an invisible one
-(price drift) that you can't control. The two costs don't share a unit you
-can just add up and minimize — one is a near-certain cost you cause
-yourself, the other is a risk you're exposed to — so there's no single
-"correct answer," only a tradeoff curve and a choice of how much risk you're
-willing to carry to save on cost. Getting that tradeoff right, and proving
-it holds on real market data instead of just on paper, is the actual
-engineering problem here.
+This is a nontrivial problem in practice, not only an academic one:
+execution trading desks employ dedicated systems and personnel to solve it,
+because the cost of an incorrect schedule is realized capital, not a test
+metric. Market impact and timing risk cannot be reduced to a single unit and
+minimized jointly. Market impact is a near-certain cost the trader imposes
+on itself; timing risk is uncertainty the trader is exposed to. There is no
+unconditionally optimal schedule, only a tradeoff curve parameterized by
+risk tolerance. Producing a schedule that is provably optimal under a stated
+risk preference, and confirming that the tradeoff holds on real market data
+rather than only in the model's own accounting, is the core engineering
+problem this project addresses.
 
 ## Results
 
-Real 2012 NASDAQ order-by-order data (LOBSTER) for AAPL, replayed through a
-simulator that walks the actual historical order book. Four strategies —
-TWAP (split evenly over time), VWAP (weight by typical volume), POV (trade
-proportional to whatever everyone else is trading), and the Almgren-Chriss
-optimal schedule — tested across 71 independent windows of the trading day.
+Real 2012 NASDAQ order-by-order data (LOBSTER) for AAPL was replayed through
+a simulator that walks the actual historical order book. Four strategies,
+TWAP (uniform time-slicing), VWAP (volume-weighted slicing), POV (a fixed
+percentage of observed market volume), and the Almgren-Chriss optimal
+schedule, were tested under identical conditions across 71 independent
+windows spanning the trading day.
 
 ![Execution trajectories by strategy](docs/figs/trajectories.png)
-*How fast each strategy sells off the position.*
+*How fast each strategy liquidates the position over time.*
 
 ![Cost distribution by strategy across 71 windows](docs/figs/distributions.png)
-*Each dot is one backtest — the optimal strategy's spread of outcomes
-visibly tightens as it's tuned more risk-averse.*
+*Implementation shortfall distribution by strategy. Dispersion narrows as
+the risk-aversion parameter increases.*
 
 ![Realized vs. predicted efficient frontier](docs/figs/realized_frontier.png)
-*The efficient frontier — the lowest cost achievable at each risk level —
-predicted by the model (light curve) vs. what actually happened on real
-trades (dark points).*
+*Realized cost and risk per strategy plotted against the model's analytic
+efficient frontier, the minimum cost achievable at each risk level.*
 
-**Headline numbers** (cost in basis points, bps — 1 bp = 0.01% of trade
-value):
+**Headline results** (cost measured in basis points, bps; 1 bp = 0.01% of
+trade value):
 
-- **Cut execution risk roughly in half** (11.5 → 5.8 bps standard deviation
-  of cost, i.e. how much the outcome bounces around) for **well under 1
-  extra bp of average cost** (5.39 → 6.35 bps), by trading faster.
-- The naive POV strategy was **worse on both cost and risk at once**
-  (5.60 bps, 13.3 bps) than the optimal schedule — strictly dominated.
-- Realized cost matched the model's own prediction to **within 0.15 bps**
-  across most of the range tested — except at the single most aggressive
-  setting, where it wants to trade faster than the visible order book has
-  liquidity to absorb (a real constraint the idealized math doesn't
-  capture), opening a ~2 bp gap.
+- The optimal schedule reduced execution risk, measured as the standard
+  deviation of implementation shortfall, from 11.5 bps to 5.8 bps, roughly
+  a factor of two, at a cost of under one additional basis point in
+  expected impact (5.39 to 6.35 bps).
+- The POV strategy was dominated: it produced both higher expected cost
+  (5.60 bps) and higher risk (13.3 bps) than the optimal schedule, meaning
+  there was no risk tolerance for which POV was the better choice.
+- Realized cost matched the model's analytic prediction to within 0.15 bps
+  across most of the tested range. At the most aggressive setting tested,
+  realized and predicted cost diverge by approximately 2 bps. This
+  divergence corresponds to the point at which the schedule demands
+  execution faster than the visible order book has liquidity to absorb, a
+  physical constraint the linear-impact model does not represent.
 
 ## How it works
 
-Picture the tradeoff as a dial. Turn it toward "patient" and the schedule
-spreads your selling evenly across the whole time window — safest from
-self-inflicted price impact, but you're exposed to random price drift the
-entire time. Turn it toward "urgent" and the schedule front-loads most of
-the selling into the first few minutes — you get the uncertainty off your
-plate fast, but you pay more because you're demanding liquidity faster than
-the market naturally wants to supply it. The Almgren-Chriss model turns that
-dial into math: given how volatile the stock is, how expensive it is to
-trade it quickly (some stocks have deep, forgiving order books; others are
-thin and punish size), and where you personally want the dial set, it
-outputs the mathematically optimal minute-by-minute selling schedule.
-Setting the dial to "totally patient" recovers the naive evenly-spread
-strategy exactly, which is a nice sanity check that the math is doing what
-it claims — the more sophisticated strategy contains the simple one as a
-special case, not as a completely different formula.
+The execution schedule is governed by a single risk-aversion parameter,
+denoted λ. At λ = 0, the model reduces exactly to uniform time-slicing
+(TWAP): impact is minimized by trading at a constant rate, and timing risk
+is simply accepted. As λ increases, the schedule front-loads execution,
+trading faster to reduce exposure to price uncertainty at the cost of
+higher expected impact. The optimal trajectory at any λ is a closed-form
+solution to a mean-variance objective over expected transaction cost. The
+λ = 0 case is not a separate heuristic bolted onto the general solution; it
+is the exact limit of the same formula, which serves as a useful internal
+consistency check on the implementation.
 
-The full derivation — the cost/risk formulas, the closed-form solution, the
-drift and resilience extensions, and the calibration methodology — is in
-[MODEL.md](MODEL.md) for anyone who wants to check the math rather than
-trust the summary.
+The full derivation, including the closed-form solution, the drift and
+resilience extensions, and the calibration methodology, is documented in
+[MODEL.md](MODEL.md).
 
 ## Engineering highlights
 
-- **C++20 core, Python analysis layer.** All performance- and
-  correctness-critical logic (parsing, book replay, execution simulation,
-  the solver) is C++; calibration and plotting are Python. The two never
-  duplicate logic — Python only does regression over CSVs a tested C++ tool
-  already produced, so there is exactly one implementation of anything
-  trap-prone.
-- **Built against real exchange data, not synthetic fixtures.** LOBSTER's
-  nanosecond-timestamped message-by-message feed is unforgiving: multi-level
-  sweeps arrive as several same-timestamp rows that have to be regrouped
-  into one trade, hidden-order executions carry unreliable direction and
-  need to be classified from the surrounding quotes, and this project found
-  in real AAPL data (not by inspection) that a book price level that
-  scrolls out of the top-10-levels-visible window and back in can look like
-  phantom liquidity if you don't explicitly account for the format's own
-  blind spot. All of these are handled and covered by tests that fail
-  without the fix, not just described.
-- **Independently verified, not just run once.** The optimal-schedule solver
-  is checked against an independently-coded numerical solve of the same
-  problem (different algorithm, shares no code), agreeing to 1 part in 10^11.
-  The order book reconstruction — rebuilt from scratch using only the raw
-  event stream — was checked row-by-row against the exchange's own recorded
-  book state across all 1.17M rows in the three test days: zero
-  contradictions.
-- **Two independent estimators for the same parameter, on purpose, and one
-  is reported as a documented failure.** The obvious way to estimate
-  temporary market-impact cost (regress trade cost on trade size) turns out
-  to be nearly uncorrelated with anything (R² ≈ 0) on this data, because
-  traders size their orders to the liquidity available rather than the
-  other way around. The estimator actually used instead — replaying the
-  historical book to directly measure the cost of consuming a given size —
-  fits far better (R² ≥ 0.97) and independently reproduces the exchange's
-  quoted bid-ask spread as a side effect. Both are in the codebase and the
-  failure is explained, not hidden.
-- **A model checking its own assumptions.** The backtester assumes (as
-  Almgren-Chriss does) that the order book refills instantly between
-  trades. Rather than leave that as an unstated assumption, the project
-  measured actual post-trade book depth recovery from the data and built a
-  second impact model (with a decay rate) to quantify what would change if
-  that assumption were wrong. It turned out to be a reasonable assumption
-  at these trade sizes — but that's a measured conclusion, not an assumed
-  one.
-- **92 automated tests**, GitHub Actions CI across Linux/macOS in both
-  Release and Debug, plus dedicated AddressSanitizer and
-  UndefinedBehaviorSanitizer jobs that run the full suite and the CLI tools
-  against real market data.
+- **C++20 core, Python analysis layer.** Parsing, order book replay,
+  execution simulation, and the optimal-schedule solver are implemented in
+  C++ for performance and correctness. Calibration and plotting are
+  implemented in Python. The two layers do not duplicate logic: Python
+  performs regression over CSV output already produced by tested C++
+  tools, so trap-prone logic has exactly one implementation.
+- **Built against real exchange data, not synthetic fixtures.** The
+  LOBSTER message feed presents several correctness hazards: multi-level
+  order book sweeps arrive as several same-timestamp rows that must be
+  aggregated into a single trade event, hidden-order executions carry
+  unreliable direction and must be classified from surrounding quotes,
+  and a price level that scrolls outside the visible depth window and
+  later returns can appear as phantom liquidity if the implementation
+  does not explicitly account for that blind spot in the data format.
+  This last case was identified through debugging on real AAPL data, not
+  by code inspection, and is covered by a regression test.
+- **Independently verified.** The closed-form solver is checked against
+  an independently implemented numerical solution to the same
+  optimization problem, a different algorithm sharing no code path,
+  agreeing to one part in 10^11. The order book reconstruction, built
+  from the raw event stream with no dependence on the exchange's own
+  snapshot data, was validated row by row against the exchange's
+  recorded book state across all 1.17 million rows in the three test
+  datasets, with zero contradictions.
+- **Two independent estimators for temporary impact, one reported as a
+  negative result.** The straightforward estimator, regressing realized
+  trade cost on trade size, has near-zero explanatory power (R² ≈ 0) on
+  this data, because traders size orders to available liquidity rather
+  than the reverse, producing selection bias. The estimator used instead
+  replays the historical order book to directly measure the cost of
+  consuming a given size, fits substantially better (R² ≥ 0.97), and
+  independently reproduces the exchange's quoted bid-ask spread as a
+  consistency check. Both estimators are implemented, and the failure
+  mode of the first is documented rather than omitted.
+- **Explicit validation of a core modeling assumption.** The backtester
+  assumes, consistent with Almgren-Chriss, that order book depth
+  replenishes instantly between trades. Rather than leave this unstated,
+  the project measured post-trade depth recovery directly from the data
+  and implemented a second impact model with an explicit decay rate to
+  quantify the effect of relaxing that assumption. The
+  instant-replenishment assumption held up as reasonable at the trade
+  sizes tested; this is a measured conclusion, not an assumed one.
+- **92 automated tests.** GitHub Actions CI runs the full suite on Linux
+  and macOS in both Release and Debug configurations, plus dedicated
+  AddressSanitizer and UndefinedBehaviorSanitizer jobs that exercise the
+  full test suite and the command-line tools against real market data.
 
 ## Honest limitations
 
 - **The backtest is not a full counterfactual.** Historical order book
-  states are replayed as they actually occurred, in a world where this
-  project's simulated orders never existed. The simulator charges the
-  strategy's own trades for the liquidity they consume and shifts the book
-  for the strategy's *own* future orders, but it does not simulate other
-  real participants reacting to that order flow — no cancellations, no
-  requoting. This makes reported costs a reasonable lower bound and makes
-  *comparisons between strategies* (all subject to the same bias) more
-  trustworthy than any single absolute number.
-- **One trading day per stock**, not a multi-day history. The 71-window
-  result is 71 overlapping (and therefore correlated, not independent)
-  samples from a single day, and results for a strongly trending day will
-  differ from a flat one — this is disclosed directly next to the results,
-  not buried.
-- **No modeling of resting/passive orders or queue position.** Every
-  simulated order is a marketable order that crosses the spread
-  immediately. This matches what the underlying model actually assumes
-  (a trading *rate*, not a probability of getting filled while waiting in
-  line), and modeling passive orders honestly would mean modeling adverse
-  selection, which is a different, harder problem than the one this project
-  scopes to.
-- **The optimal schedule isn't well-defined for every stock.** For one of
-  the three tickers tested (INTC), the calibrated parameters violate the
-  model's own mathematical precondition — this is a real, disclosed finding
-  (see MODEL.md), not a bug, and the code detects and reports it rather than
-  silently returning a nonsensical answer.
+  states are replayed as they occurred, in a world where the simulated
+  strategy's own orders never existed. The simulator charges the
+  strategy for the liquidity its own trades consume and carries forward
+  the resulting price shift for that strategy's subsequent orders, but
+  it does not model how other market participants would react to that
+  order flow: no simulated cancellations or requoting. Reported costs
+  should be interpreted as a reasonable lower bound, and comparisons
+  between strategies, all subject to the same bias, are more reliable
+  than any single absolute number.
+- **Single trading day per ticker.** The 71-window result draws from
+  overlapping windows within one trading day, so the samples are
+  correlated rather than independent, and results depend on that day's
+  realized price path. This limitation is stated directly alongside the
+  results.
+- **No modeling of passive orders or queue position.** Every simulated
+  order is marketable and crosses the spread immediately, consistent
+  with the underlying model, which specifies a trading rate rather than
+  a fill probability. Modeling passive orders correctly would require
+  modeling adverse selection, which is outside the scope of this
+  project.
+- **The optimal schedule is not well-defined for every instrument
+  tested.** For one of the three tickers (INTC), the calibrated
+  parameters violate the model's own well-posedness condition. This is a
+  genuine, disclosed finding, documented in MODEL.md, and the
+  implementation detects and reports the condition rather than returning
+  a degenerate result.
 
 ## How to run it
 
@@ -182,23 +180,23 @@ python3 -m venv .venv && .venv/bin/pip install matplotlib
 ./build/oee_rebuild --msg <message.csv> --book <orderbook.csv>   # book validation
 ```
 
-## What I'd extend with more time
+## What I would extend with more time
 
-- **Multiple trading days** per ticker, to see whether the single-day
-  findings here (especially the resilience measurement, which was
-  inconclusive partly from limited data) hold up or shift.
-- **A real counterfactual simulator** — inserting synthetic orders directly
-  into a message-driven order book reconstruction (already built for
-  validation) so other simulated participants' reactions are modeled, not
-  assumed away.
-- **Passive/limit order strategies with queue-position modeling**, which
-  would require modeling adverse selection honestly rather than sidestepping
-  it as out of scope.
-- **Multi-asset execution** — coordinating the schedule for a basket of
-  correlated names instead of one stock at a time.
+- **Multiple trading days per ticker**, to determine whether the
+  single-day findings, particularly the resilience measurement, which
+  was inconclusive given limited data, generalize.
+- **A counterfactual execution simulator**, inserting synthetic orders
+  directly into the message-driven order book reconstruction (already
+  implemented for validation) so that other participants' reactions are
+  modeled rather than assumed away.
+- **Passive and limit-order strategies with queue-position modeling**,
+  requiring an honest treatment of adverse selection rather than
+  exclusion from scope.
+- **Multi-asset execution**, coordinating schedules across a basket of
+  correlated instruments rather than a single security.
 
 ## Reference data
 
-LOBSTER (lobsterdata.com) academic limit order book data, AAPL/INTC/GOOG,
+LOBSTER (lobsterdata.com) academic limit order book data: AAPL, INTC, GOOG,
 2012-06-21. See [MODEL.md](MODEL.md) for the full derivation, calibration
 methodology, and academic references.
