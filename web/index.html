@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Optimal Execution Engine · Live Demo</title>
+    <meta
+      name="description"
+      content="Almgren-Chriss optimal trade execution, replayed against a real NASDAQ order book in your browser. Turn the risk dial and watch four strategies recompute across 71 real trading windows."
+    />
+    <meta name="theme-color" content="#0b0e13" />
+    <meta name="color-scheme" content="dark" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Optimal Execution Engine · Live Demo" />
+    <meta
+      property="og:description"
+      content="Sell fast and you move the price. Sell slow and it moves you. An Almgren-Chriss execution engine on a real NASDAQ order book, running live in the browser."
+    />
+    <meta property="og:url" content="%SITE_URL%/" />
+    <meta property="og:image" content="%SITE_URL%/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Sell fast and you move the price. Sell slow and it moves you." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="%SITE_URL%/og.png" />
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+    />
+
+    <!-- start the data download before the app bundle has finished parsing -->
+    <link rel="preload" href="/data/meta.json" as="fetch" crossorigin />
+    <link rel="preload" href="/data/aapl-2012-06-21.v1.pack" as="fetch" crossorigin />
+
+    <style>
+      /* paint the ground immediately so there is no white flash before the stylesheet loads */
+      html,
+      body {
+        background: #0b0e13;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>This demo replays a real order book in JavaScript, so it needs JavaScript enabled.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

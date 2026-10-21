@@ -1,0 +1,12 @@
+{
+  "ticker": "AAPL",
+  "date": "2012-06-21",
+  "pack": "aapl-2012-06-21.v1.pack",
+  "n": 23400,
+  "levels": 10,
+  "columns": 41,
+  "openNs": "34200004241176",
+  "openSecAfterMidnight": 34200.004241176,
+  "messageRows": 400391,
+  "source": "LOBSTER sample data (lobsterdata.com), downsampled to a 1-second grid"
+}
